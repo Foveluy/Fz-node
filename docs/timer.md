@@ -108,19 +108,94 @@ const timerWheel = {};
 搞定了，我们注册几个任务
 ```javascript
 const timer1 = setTimeout(() => {}, 120*1000);//任务1
+//中间干了什么事等了10s
 const timer2 = setTimeout(() => {}, 120*1000);//任务2
+//中间干了什么事等了10s
 const timer3 = setTimeout(() => {}, 120*1000);//任务3
 ```
 
 ```javascript
 //底层会这么做
-const L = timerWheel[120*1000]
+var L = timerWheel[120*1000]
+if(!L) L = new TimersList(xxx)
 L.push(任务1)
 L.push(任务2)
 L.push(任务3)
 ```
-
 [时间轮的图](https://github.com/215566435/Fz-node/blob/master/docs/assets/time-wheel.png)
 
+# 依次触发同为key120*1000的Timer
+
+同为```120*1000```的Timer一共有三个，插入的时间分别不同，为了方便，我们可以进行假设，第一个Timer启动的时间是
+
+```javascript
+timer1._idleStart === 0
+timer2._idleStart === 10000
+timer3._idleStart === 20000
+```
+
+1. 首先```_idleStart为0的timer```进入TimersList中（里面有一个C实现的timer计时器），计时结束后，进行回调，然后删除```_idleStart为0的timer```
+2. 然后```_idleStart为10000的timer```进入TimersList中（里面有一个C实现的timer计时器），计时结束后，进行回调，然后删除```_idleStart为10000的timer```
+3. ....
+
+由此可见，我们三个都是120秒的定时器，依次触发，通过这种巧妙的设计，使得一个Timer对象得到了最大的复用，从而极大的提升了timer模块的性能。
+
+
+# 回到最初的使用场景：HTTP Date 返回头
+
+- 使用缓存配合我们刚刚的Timer，实现高性能的获取HTTP Date返回头
+
+```javascript 
+ 31 var dateCache;
+ 32 function utcDate() {
+ 33   if (!dateCache) {
+ 34     var d = new Date();
+ 35     dateCache = d.toUTCString();
+ 36     timers.enroll(utcDate, 1000 - d.getMilliseconds());
+ 37     timers._unrefActive(utcDate);
+ 38   }
+ 39   return dateCache;
+ 40 }
+ 41 utcDate._onTimeout = function() {
+ 42   dateCache = undefined;
+ 43 };
+
+228   // Date header
+229   if (this.sendDate === true && state.sentDateHeader === false) {
+230     state.messageHeader += 'Date: ' + utcDate() + CRLF;
+231   }
+```
+
+- L230，每次构造 Date 字段值都会去获取系统时间，但精度要求不高，只需要秒级就够了，所以在1S 的连接请求可以复用 dateCache 的值，超时后重置为undefined.
+
+- L34-L35,下次获取会重启生成。
+
+- L36-L37,重新设置超时时间以便更新。
+
+
+# 回到最初的使用场景：HTTP Request header Keep-Alive
+
+```javascript
+303   if (self.timeout)
+304     socket.setTimeout(self.timeout);
+305   socket.on('timeout', function() {
+306     var req = socket.parser && socket.parser.incoming;
+307     var reqTimeout = req && !req.complete && req.emit('timeout', socket);
+308     var res = socket._httpMessage;
+309     var resTimeout = res && res.emit('timeout', socket);
+310     var serverTimeout = self.emit('timeout', socket);
+311 
+312     if (!reqTimeout && !resTimeout && !serverTimeout)
+313       socket.destroy();
+314   });
+```
+
+- 默认的 timeout 为this.timeout = 2 * 60 * 1000; 也就是 120s。 
+- L313，超时则销毁 socket。
+
+# 参考文档
+1. https://yjhjstz.gitbooks.io/deep-into-node/content/chapter3/chapter3-1.html
+2. https://zhuanlan.zhihu.com/p/30763470
+3. https://link.zhihu.com/?target=http%3A//www.cnblogs.com/hust/p/4809208.html
 
 
