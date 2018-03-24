@@ -213,4 +213,7 @@ timer3._idleStart === 20000
 2. https://zhuanlan.zhihu.com/p/30763470
 3. https://link.zhihu.com/?target=http%3A//www.cnblogs.com/hust/p/4809208.html
 
+# 源码
+1.[timer.js模块](https://github.com/nodejs/node/blob/master/lib/timers.js)
+2.[timer_wrap](https://github.com/nodejs/node/blob/master/src/timer_wrap.cc)
 
