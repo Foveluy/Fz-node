@@ -97,8 +97,30 @@ var timer  = new Timer();  // 创建计时器对象，用于计时
 
 这就是一个时间轮的算法，说起来贼特么难懂，但是做起来却很简单.
 
-# 设计一个Timer时间轮
+# 伪代码设计一个Timer时间轮
 
+
+首先我们准备一个对象，用于按key存储Timer:
+```javascript
+const timerWheel = {};
+```
+
+搞定了，我们注册几个任务
+```javascript
+const timer1 = setTimeout(() => {}, 120*1000);//任务1
+const timer2 = setTimeout(() => {}, 120*1000);//任务2
+const timer3 = setTimeout(() => {}, 120*1000);//任务3
+```
+
+```javascript
+//底层会这么做
+const L = timerWheel[120*1000]
+L.push(任务1)
+L.push(任务2)
+L.push(任务3)
+```
+
+[时间轮的图](https://github.com/215566435/Fz-node/blob/master/docs/assets/time-wheel.png)
 
 
 
