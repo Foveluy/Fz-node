@@ -22,6 +22,7 @@ Content-Type: text/html
 Date: Sat, 24 Mar 2018 00:19:46 GMT //注意这里
 Server: openresty/1.9.15.1
 ```
+
 我们每次发起HTTP请求时，服务器端都会生成这么一个时间戳返回。
 
 大家觉得：切，这个有什么，老夫```Date.now()```，转换一下，马上给你搞出来。
@@ -137,7 +138,7 @@ L.push(任务1)
 L.push(任务2)
 L.push(任务3)
 ```
-[时间轮的图](https://github.com/215566435/Fz-node/blob/master/docs/assets/time-wheel.png)
+![时间轮的图](https://github.com/215566435/Fz-node/blob/master/docs/assets/time-wheel.png?raw=true)
 
 # 依次触发同为key120*1000的Timer
 
@@ -149,43 +150,12 @@ timer2._idleStart === 10000
 timer3._idleStart === 20000
 ```
 
-1. 首先```_idleStart为0的timer```进入TimersList中（里面有一个C实现的timer计时器），计时结束后，进行回调，然后删除```_idleStart为0的timer```
+1. 首先 ***_idleStart为0的timer*** 进入TimersList中（里面有一个C实现的timer计时器），计时结束后，进行回调，然后删除```_idleStart为0的timer```
 2. 然后```_idleStart为10000的timer```进入TimersList中（里面有一个C实现的timer计时器），计时结束后，进行回调，然后删除```_idleStart为10000的timer```
 3. ....
 
 由此可见，我们三个都是120秒的定时器，依次触发，通过这种巧妙的设计，使得一个Timer对象得到了最大的复用，从而极大的提升了timer模块的性能。
 
-
-# 回到最初的使用场景：HTTP Date 返回头
-
-- 使用缓存配合我们刚刚的Timer，实现高性能的获取HTTP Date返回头
-
-```javascript 
- 31 var dateCache;
- 32 function utcDate() {
- 33   if (!dateCache) {
- 34     var d = new Date();
- 35     dateCache = d.toUTCString();
- 36     timers.enroll(utcDate, 1000 - d.getMilliseconds());
- 37     timers._unrefActive(utcDate);
- 38   }
- 39   return dateCache;
- 40 }
- 41 utcDate._onTimeout = function() {
- 42   dateCache = undefined;
- 43 };
-
-228   // Date header
-229   if (this.sendDate === true && state.sentDateHeader === false) {
-230     state.messageHeader += 'Date: ' + utcDate() + CRLF;
-231   }
-```
-
-- L230，每次构造 Date 字段值都会去获取系统时间，但精度要求不高，只需要秒级就够了，所以在1S 的连接请求可以复用 dateCache 的值，超时后重置为undefined.
-
-- L34-L35,下次获取会重启生成。
-
-- L36-L37,重新设置超时时间以便更新。
 
 
 # 回到最初的使用场景：HTTP Request header Keep-Alive
@@ -205,6 +175,7 @@ timer3._idleStart === 20000
 314   });
 ```
 
+
 - 默认的 timeout 为this.timeout = 2 * 60 * 1000; 也就是 120s。 
 - L313，超时则销毁 socket。
 
@@ -216,4 +187,3 @@ timer3._idleStart === 20000
 # 源码
 1.[timer.js模块](https://github.com/nodejs/node/blob/master/lib/timers.js)
 2.[timer_wrap](https://github.com/nodejs/node/blob/master/src/timer_wrap.cc)
-
