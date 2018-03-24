@@ -22,16 +22,22 @@ Content-Type: text/html
 Date: Sat, 24 Mar 2018 00:19:46 GMT //注意这里
 Server: openresty/1.9.15.1
 ```
-我们每次发起HTTP请求时，服务器端都会生成这么一个时间戳返回。大家觉得：切，这个有什么，老夫```Date.now()```，转换一下，马上给你搞出来。
+我们每次发起HTTP请求时，服务器端都会生成这么一个时间戳返回。
 
-我只能说，你太肤浅了。这么说的原因是因为```任何一个底层时间获取函数都是一次严重的系统调用```，熟悉系统调用这个词的同学一定知道，每一个System Call的消耗都是非常巨大的。
+大家觉得：切，这个有什么，老夫```Date.now()```，转换一下，马上给你搞出来。
+
+我只能说，你太肤浅了。这么说的原因是因为```任何一个底层时间获取函数都是一次严重的系统调用```.
+
+熟悉系统调用这个词的同学一定知道，每一个System Call的消耗都是非常巨大的。
 
 假设，我们请求成千成万，你每次都去调用System Call你的系统并发量会下降大约30-40%左右！
 
 或许你会想，那老子不提供了，怎么样？当然不行，规范是这么写的，如果你按规范走，那你就时邪教了。
 
->题外话：这数据不是我凭空想象出来的，而是我半年前造的一个Python写的Async/await服务器时，发现的。
->[show me the code：luya服务器](https://github.com/215566435/LuyWeb/blob/master/luya/response.py#L116)
+```javascript
+题外话：这数据不是我凭空想象出来的，而是我半年前造的一个Python写的Async/await服务器时，发现的。
+[show me the code：luya服务器](https://github.com/215566435/LuyWeb/blob/master/luya/response.py#L116)
+```
 
 # 使用场景2:HTTP Request header Keep-Alive
 
@@ -39,15 +45,24 @@ Server: openresty/1.9.15.1
 ```js
 request->服务器开启socket迎接->处理request，拼装回复->response->关闭socket
 ```
-这样的一个流程看起来很舒坦，但实际上隐含着巨大的性能问题。每次开启和关闭socket的操作，属于System Call，非常的重，就跟妈妈用锤子锤了你电脑一样重。
+这样的一个流程看起来很舒坦，但实际上隐含着巨大的性能问题。
+
+每次开启和关闭socket的操作，属于System Call，非常的重，就跟妈妈用锤子锤了你电脑一样重。
 
 大量请求到来时，开开关关，性能下降20-30%，非常巨大。
->我又怎么懂那么精确的，依旧是我之前造轮子的时候碰上的.....
->[show me the code：luya服务器](https://github.com/215566435/LuyWeb)
 
-为了解决这个问题，人们在HTTP中加入了Keep-Alive字段，在1.0时代，默认关闭，开启的时候需要"Connection: Keep-Alive"。而HTTP 1.1以后，则是默认就开启，关闭："Connection: close".
+```javascript
+我又怎么懂那么精确的，依旧是我之前造轮子的时候碰上的.....
+[show me the code：luya服务器](https://github.com/215566435/LuyWeb)
+```
 
-当然了，一个socket不能一直开着，会消耗内存（linux下每个网络socket消耗大约3-4kb的内存).因此，在一段时间（默认120s）内客户端没有什么新的请求，这个socket就会关闭了。
+为了解决这个问题，人们在HTTP中加入了Keep-Alive字段，在1.0时代，默认关闭，开启的时候需要"Connection: Keep-Alive"。
+
+而HTTP 1.1以后，则是默认就开启，关闭："Connection: close".
+
+当然了，一个socket不能一直开着，会消耗内存（linux下每个网络socket消耗大约3-4kb的内存).
+
+因此，在一段时间（默认120s）内客户端没有什么新的请求，这个socket就会关闭了。
 
 由此我们可以看到，我们必须引入某种计时器机制，去应对这种情况。Node.js的HTTP模块对于每一个新的连接创建一个 socket 对象，调用socket.setTimeout设置一个定时器用于超时后自动断开连接。
 
