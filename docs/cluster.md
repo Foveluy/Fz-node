@@ -100,7 +100,7 @@ Error: listen EADDRINUSE 127.0.0.1:8080
 这里值得注意的一个细节就是，虽然我们同时监听了一个接口报错了，但是仍然有 **第一个服务器开启成功了**，这也印证了之前我们的想法：***我们的HTTP都会重新开启一个socket套接字，其文件描述符各不相同，每个描述符都跑去监听同一个接口，那就悲剧了。***
 
 同图来表示
-![]()
+![](https://github.com/215566435/Fz-node/blob/master/docs/assets/diifer-socket.png?raw=true)
 
 # 进程间通信
 
