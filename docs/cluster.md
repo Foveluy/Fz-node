@@ -164,3 +164,8 @@ egg.js集群方案已经囊括上面我说的所有点，以及对其进行了�
 3. 封装好的IPC接口，方便开发者调用
 4. IPC实战演练
 5. [IPC的高级应用](https://eggjs.org/zh-cn/advanced/cluster-client.html)
+
+
+# 参考资料
+- [egg.js集群方案](https://eggjs.org/zh-cn/core/cluster-and-ipc.html)
+- 深入浅出node.js  -朴灵
