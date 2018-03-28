@@ -151,6 +151,20 @@ console.log('准备进入循环')
 ```
 直到最后一行的```console.log('准备进入循环')```跑完，才会开始准备进入事件循环。
 
+# 事件循环的6个主要阶段
+
+- timers
+- I/O callbacks
+- idle, prepare
+- poll
+- check
+- close callbacks
+
+#### 1. timers
+
+
+
+
 # 核心函数uv_run
 
 我们就来看看这个神奇的```uv_run```:
