@@ -247,7 +247,7 @@ int uv_run(uv_loop_t* loop, uv_run_mode mode) {
 ```
 代码中我已经写得很详细了，相信不熟悉c代码的各位也能轻易搞懂，没错，事件循环就是一个大```while```而已！神秘的面纱就此揭开。
 
-# uv__io_poll阶段
+# poll阶段
 
 这个阶段设计得非常巧妙，这个函数第二个参数是一个```timeout```参数，而这个```timeOut```由来自```uv_backend_timeout```函数，我们进去一探究竟！
 [源码](https://github.com/libuv/libuv/blob/v1.x/src/unix/core.c)
