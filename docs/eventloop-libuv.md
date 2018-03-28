@@ -62,7 +62,7 @@ i m file
 ```
 
 我们快速使用一下这个api
-```c#
+```js
 #include <stdio.h>
 #include <uv.h>
 
@@ -83,7 +83,7 @@ int main() {
 这么一来，我们的思路一目了然，填写path之后，调用```uv_fs_open```，然后跑loop，当打开文件结束之后，我们就会到达```on_open```这个callback中。值得注意的是，在c中，打开文件和读文件属于分开的逻辑，两步回调，也是够蛋疼的，但是为了获得极限的性能，异步进行到底。
 
 我们得到的结果会存储在全局变量```open_req```中，实际上on_open中的```*req```就是指向这个全局变量。接下来我们要进行一下读操作：
-```c#
+```js
 #include <stdio.h>
 #include <uv.h>
 
@@ -114,7 +114,54 @@ int main() {
 - req->result 是用于判断读取成功与否的标志位，分别有三种值：大于0，小于0，以及等于0。大于0成功，小于0失败
 - uv_buf_init 将一个全局变量```buffer```初始化成```uv_buf_t```的类型
 - uv_fs_read 读取函数，跟open函数很类似，注意多了一个参数：iov，read函数会把读到的数据塞进iov中
-- 读取完毕以后，来到```on_read```函数，结果放在```iov.base```中
+- 读取完毕以后，来到```on_read```函数，结果放在```iov.base```中，我们就可以我们刚刚文件里写的东西了。
+
+
+# 事件循环什么时候开始的？
+
+这个问题，我相信很多人都没想过，甚至想过的人，可能也开始觉得纳闷：```理解事件循环什么时候开始的这对我们理解事件循环本身有什么帮助？```，这并不是我一人钻牛角尖，而是只有搞明白这些，才能真正理解事件循环。
+
+```js
+int main() {
+    const char* path = "/Users/zf/Desktop/Fz-node/libuv-simple/libuv-simple/text.txt";
+    uv_fs_open(uv_default_loop(), &open_req,path, O_RDONLY, 0, on_open);
+    uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+    uv_fs_req_cleanup(&open_req);
+    return 0;
+}
+```
+回顾刚刚的```main```函数，我们发现，读取的操作```uv_fs_open```有两个特殊的地方：
+1. 在```uv_run```之前
+2. 竟然需要```uv_default_loop()```作为参数
+
+其实从这里我们已经可以看出诡异之处，```事件循环是在所有的同步操作之前```。也就是说，无论是libuv还是node都是完成了以下步骤才会进入循环:
+- 所有同步任务
+- 同步任务中的异步操作发出请求
+- 规划好同步任务中的定时器
+- 最后process.nextTrick()等等
+
+用js代码表明的话
+```js
+const http = require('http') //同步任务
+const port = 3000 //同步任务
+http
+.createServer()
+.listen(port, () => console.log('我是第一轮事件循环')) //同步任务中的异步请求
+console.log('准备进入循环')
+```
+直到最后一行的```console.log('准备进入循环')```跑完，才会开始准备进入事件循环。
+
+# 核心函数uv_run
+
+```uv_run```
+
+
+
+
+
+
+
+
 
 
 
