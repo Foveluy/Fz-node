@@ -311,7 +311,7 @@ int uv__next_timeout(const uv_loop_t* loop) {
 
 至此，我们就知道，这个```timeout```如果有值，那就一定是```距离此时此刻，loop中，最先到期的一个timer的时间```，如果这个timer时间太长，则以```INT_MAX``` 这个常数时间为基准。在(unix)c++头文件```#include <limits.h> ```中定义得到这个常量是：```32767```(不确定,单位应该是32.767毫秒).
 
-# 得到Timeout以后uv__io_poll做了什么？
+# 得到Timeout以后poll做了什么？
 
 ```uv__io_poll```获得了一个最多是```32767```的一个等待时间，那么他等待什么呢？等等，你不觉得奇怪吗？事件循环竟然卡住了，再等等，node也会阻塞了？
 
