@@ -151,23 +151,44 @@ console.log('准备进入循环')
 ```
 直到最后一行的```console.log('准备进入循环')```跑完，才会开始准备进入事件循环。
 
-# 事件循环的6个主要阶段
+# 事件循环的7个主要阶段
 
+- update_time
 - timers
 - I/O callbacks
 - idle, prepare
-- poll
+- I/O poll
 - check
 - close callbacks
 
-#### 1. timers
+也就是说，事件循环必须跑完这6个阶段，才算一个轮回。这一点一定要深刻记住。
+
+### 1.update_time
+在事件循环的开头，这一步的作用实际上是为了获取一下系统事件，以保证之后的timer有个计时的标准。这个动作会在每次事件循环的时候都发生，确保了之后timer触发的准确性。（其实也不太准确....)
+
+### 2. timers
+事件循环跑到这个阶段的时候，要检查是否有```到期的timer```,其实也就是```setTimeout```和```setInterval```这种类型的timer，到期了，就会执行他们的回调。
+
+### 3. I/O callbacks
+处理异步事件的回调，比如网络I/O，比如文件读取I/O。当这些I/O动作都***结束***的时候，在这个阶段会触发它们的回调。我特别指出了结束这个限定语。
+
+### 4. idle, prepare
+这个阶段内部做一些动作，与理解事件循环没啥关系
 
 
+### 5. I/O poll阶段
+这个阶段相当有意思，也是事件循环设计的一个有趣的点。这个阶段是***选择运行***的。选择运行的意思就是不一定会运行。在这里，我先卖一个关子，后问详细深入讨论。
+
+### 6. check
+执行```setImmediate```操作
+
+### 7. close callbacks
+关闭I/O的动作，比如文件描述符的关闭，链接断开，等等等
 
 
 # 核心函数uv_run
 
-我们就来看看这个神奇的```uv_run```:
+上述的七个阶段其实已经很明确，多看几遍就能记住，我们重点来分析一下，libuv源码是怎么写的。看看这个神奇的```uv_run```:
 
 [源码](https://github.com/libuv/libuv/blob/v1.x/src/unix/core.c)
 ```js
@@ -176,30 +197,47 @@ int uv_run(uv_loop_t* loop, uv_run_mode mode) {
   int r;
   int ran_pending;
 
+//首先检查我们的loop还是否活着
+//活着的意思代表loop中是否有异步任务
+//如果没有直接就结束
   r = uv__loop_alive(loop);
   if (!r)
     uv__update_time(loop);
 
+//传说中的事件循环，你没看错了啊！就是一个大while
   while (r != 0 && loop->stop_flag == 0) {
+      //更新事件阶段
     uv__update_time(loop);
+
+    //处理timer回调
     uv__run_timers(loop);
+
+    //处理异步任务回调 
     ran_pending = uv__run_pending(loop);
+
+    //没什么用的阶段
     uv__run_idle(loop);
     uv__run_prepare(loop);
 
+    //这里值得注意了
+    //从这里到后面的uv__io_poll都是非常的不好懂的
+    //先记住timeout是一个时间
+    //uv_backend_timeout计算完毕后，传递给uv__io_poll
+    //如果timeout = 0,则uv__io_poll会直接跳过
     timeout = 0;
     if ((mode == UV_RUN_ONCE && !ran_pending) || mode == UV_RUN_DEFAULT)
       timeout = uv_backend_timeout(loop);
 
     uv__io_poll(loop, timeout);
+
+    //就是跑setImmediate
     uv__run_check(loop);
+
+    //关闭文件描述符等操作
     uv__run_closing_handles(loop);
 
-    if (mode == UV_RUN_ONCE) {
-      uv__update_time(loop);
-      uv__run_timers(loop);
-    }
-
+    //再次检查是否活着
+    //如果没有任何任务了，就推出
     r = uv__loop_alive(loop);
     if (mode == UV_RUN_ONCE || mode == UV_RUN_NOWAIT)
       break;
@@ -207,6 +245,164 @@ int uv_run(uv_loop_t* loop, uv_run_mode mode) {
   return r;
 }
 ```
+代码中我已经写得很详细了，相信不熟悉c代码的各位也能轻易搞懂，没错，事件循环就是一个大```while```而已！神秘的面纱就此揭开。
+
+# uv__io_poll阶段
+
+这个阶段设计得非常巧妙，这个函数第二个参数是一个```timeout```参数，而这个```timeOut```由来自```uv_backend_timeout```函数，我们进去一探究竟！
+[源码](https://github.com/libuv/libuv/blob/v1.x/src/unix/core.c)
+```js
+int uv_backend_timeout(const uv_loop_t* loop) {
+  if (loop->stop_flag != 0)
+    return 0;
+
+  if (!uv__has_active_handles(loop) && !uv__has_active_reqs(loop))
+    return 0;
+
+  if (!QUEUE_EMPTY(&loop->idle_handles))
+    return 0;
+
+  if (!QUEUE_EMPTY(&loop->pending_queue))
+    return 0;
+
+  if (loop->closing_handles)
+    return 0;
+
+  return uv__next_timeout(loop);
+}
+```
+原来是一个多步if函数，这代码写得真让人好懂！我们一个一个分析
+1. ```stop_flag```:这个标记是 ```0```的时候，意味着事件循环跑完这一轮就退出了，返回的时间是0
+2. ```!uv__has_active_handles```和```!uv__has_active_reqs```:看名字都知道，如果没有任何的异步任务（包括timer和异步I/O)，那```timeOut```时间一定就是0了    
+3. ```QUEUE_EMPTY(idle_handles)```和```QUEUE_EMPTY(pending_queue)```:异步任务是通过注册的方式放进了```pending_queue```中，无论是否成功，都已经被注册，如果什么都没有，这两个队列就是空，所以没必要等了。
+4. ```closing_handles```:我们的循环进入了关闭阶段，没必要等待了
+
+以上所有条件啰啰嗦嗦，判断来判断去，为的就是等这句话```return uv__next_timeout(loop);```，这句话，告诉了```uv__io_poll```说：你到底停多久，接下来，我们继续看这个神奇的```uv__next_timeout```是怎么获取时间的。
+
+```js
+int uv__next_timeout(const uv_loop_t* loop) {
+  const struct heap_node* heap_node;
+  const uv_timer_t* handle;
+  uint64_t diff;
+
+  heap_node = heap_min((const struct heap*) &loop->timer_heap);
+  if (heap_node == NULL)
+    return -1; /* block indefinitely */
+
+  handle = container_of(heap_node, uv_timer_t, heap_node);
+  if (handle->timeout <= loop->time)
+    return 0;
+
+//这句代码给出了关键性的指导
+  diff = handle->timeout - loop->time;
+
+//不能大于最大的INT_MAX
+  if (diff > INT_MAX)
+    diff = INT_MAX;
+
+  return diff;
+}
+
+```
+
+上述函数做了一件非常简单的事情
+1. 对比当前```loop```设置的时间，还记得一开头我们的```update_time```吗，这里用上了，保存在```loop->time```中
+2. 获取到```距离此时此刻，loop中，最先到期的一个timer的时间```，不懂就多读几遍....
+
+至此，我们就知道，这个```timeout```如果有值，那就一定是```距离此时此刻，loop中，最先到期的一个timer的时间```，如果这个timer时间太长，则以```INT_MAX``` 这个常数时间为基准。在(unix)c++头文件```#include <limits.h> ```中定义得到这个常量是：```32767```(不确定,单位应该是32.767毫秒).
+
+# 得到Timeout以后uv__io_poll做了什么？
+
+```uv__io_poll```获得了一个最多是```32767```的一个等待时间，那么他等待什么呢？等等，你不觉得奇怪吗？事件循环竟然卡住了，再等等，node也会阻塞了？
+
+不要担心，还记得我们刚刚一堆的判断吗？其实```只要有任务需要马上执行的时候```，这个函数是不会被调用的。那么被调用的时候则是：所有被注册的异步任务都没有完成（返回）的时候，这时候等一下其实没什么所谓，```等的就是这些异步任务会不会在这么极其短暂的时间内发生I/O完毕！```，至于等待的时间会根据每个系统的实现而不同，其实现原理就是epoll_wait函数做一个定时器..
+
+等待结束以后，就会进入```check```阶段.
+
+
+# nextTick去哪里了？
+
+纵观整个事件循环，我们都没有发现，神秘的nextTick去哪里了。我们继续肛到nextTick中的源码中：
+```js
+startup.processNextTick = function() {
+    var nextTickQueue = [];
+    var pendingUnhandledRejections = [];
+    var microtasksScheduled = false;
+
+    // Used to run V8's micro task queue.
+    var _runMicrotasks = {};
+
+    // *Must* match Environment::TickInfo::Fields in src/env.h.
+    var kIndex = 0;
+    var kLength = 1;
+
+    process.nextTick = nextTick;
+    // Needs to be accessible from beyond this scope.
+    process._tickCallback = _tickCallback;
+    process._tickDomainCallback = _tickDomainCallback;
+
+   //这里真正的调用了c++层的
+    const tickInfo = process._setupNextTick(_tickCallback, _runMicrotasks);
+    // 省略...
+}
+```
+在胶水层```src/async_wrap.cc```中，我们可以看到:
+
+```js
+Local<Value> AsyncWrap::MakeCallback(const Local<Function> cb,
+                                      int argc,
+                                      Local<Value>* argv) {
+  // ...
+  Environment::TickInfo* tick_info = env()->tick_info();
+
+  if (tick_info->in_tick()) {
+    return ret;
+  }
+
+//如果没有的话直接执行promise这种微任务
+  if (tick_info->length() == 0) {
+    env()->isolate()->RunMicrotasks();
+  }
+
+  if (tick_info->length() == 0) {
+    tick_info->set_index(0);
+    return ret;
+  }
+
+  tick_info->set_in_tick(true);
+//如果有nextTick，promise这种微任务会被放在nextTick之后，先执行nextTick
+  env()->tick_callback_function()->Call(process, 0, nullptr);
+
+  tick_info->set_in_tick(false);
+```
+
+我们写一段代码来看看
+```js
+//无论你怎么调整Promise和nextTick的顺序，永远输出的是1和2
+Promise.resolve().then(() => console.log(2))
+process.nextTick(() => console.log(1))
+//Promise.resolve().then(() => console.log(2))放在这里也一样
+```
+
+Node 规定，```process.nextTick```和```Promise```的回调函数，追加在本轮循环，即同步任务一旦执行完成，就开始执行它们。而```setTimeout```、```setInterval```、```setImmediate```的回调函数，追加在次轮循环。
+
+```js
+// 下面两行，次轮循环执行
+setTimeout(() => console.log(1));
+setImmediate(() => console.log(2));
+// 下面两行，本轮循环执行
+process.nextTick(() => console.log(3));
+Promise.resolve().then(() => console.log(4));
+```
+
+# 总结
+
+- 事件循环的开始，在所有同步代码第一次注册完以后开始（如果有异步任务的话）
+- 事件循环分为7个阶段，其中```uv__io_poll```阶段最难懂。
+- ```process.nextTick```的操作，会在每一轮事件循环的最后执行
+
+
+
 
 
 
