@@ -395,6 +395,9 @@ process.nextTick(() => console.log(3));
 Promise.resolve().then(() => console.log(4));
 ```
 
+因为是源码解析，所以具体的我就不多说，大家只可以看文档：[node官方文档](https://nodejs.org/en/docs/guides/event-loop-timers-and-nexttick/)
+
+
 # 总结
 
 - 事件循环的开始，在所有同步代码第一次注册完以后开始（如果有异步任务的话）
