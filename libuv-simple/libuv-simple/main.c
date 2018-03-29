@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <uv.h>
+#include <node.h>
 
 uv_fs_t open_req;
 uv_fs_t _read;

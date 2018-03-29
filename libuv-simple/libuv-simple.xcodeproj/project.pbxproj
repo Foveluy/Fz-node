@@ -246,6 +246,7 @@
 		B959290C206AFDFA0087B1F4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = LHQ6R5P9F7;
 				HEADER_SEARCH_PATHS = (
@@ -253,6 +254,8 @@
 					/usr/local/Cellar/,
 					"/usr/local/Cellar/libuv/HEAD-edf05b9/",
 					"/usr/local/Cellar/libuv/HEAD-edf05b9/include",
+					/usr/local/include,
+					/usr/local/include/node,
 				);
 				LIBRARY_SEARCH_PATHS = "/usr/local/Cellar/libuv/HEAD-edf05b9/lib";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -262,6 +265,7 @@
 		B959290D206AFDFA0087B1F4 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = LHQ6R5P9F7;
 				HEADER_SEARCH_PATHS = (
@@ -269,6 +273,8 @@
 					/usr/local/Cellar/,
 					"/usr/local/Cellar/libuv/HEAD-edf05b9/",
 					"/usr/local/Cellar/libuv/HEAD-edf05b9/include",
+					/usr/local/include,
+					/usr/local/include/node,
 				);
 				LIBRARY_SEARCH_PATHS = "/usr/local/Cellar/libuv/HEAD-edf05b9/lib";
 				PRODUCT_NAME = "$(TARGET_NAME)";
