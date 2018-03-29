@@ -1,3 +1,11 @@
-const addon = require('./build/Release/addon');
+const EventEmitter = require('events');
 
-console.log(addon.hello());
+let emitter = new EventEmitter();
+
+emitter.on('myEvent', function sth () {
+    console.log('进来')
+//   emitter.on('myEvent', sth);
+  console.log('hi');
+});
+
+emitter.emit('myEvent');
